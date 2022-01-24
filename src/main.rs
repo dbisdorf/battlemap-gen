@@ -107,7 +107,7 @@ impl Rectangle {
         self.width() * self.height()
     }
 
-    fn perimeter_length(&self) -> u32 {
+    fn perimeter(&self) -> u32 {
         self.width() * 2 + self.height() * 2 - 4
     }
 
@@ -327,6 +327,24 @@ impl Rectangle {
         (rng.gen_range(self.x1+margin..self.x2-margin+1), rng.gen_range(self.y1+margin..self.y2-margin+1))
     }
 
+    fn find_exterior_point(&self, rng: &mut ThreadRng) -> (u32, u32) {
+        let mut point = (self.x1, self.y1);
+        let horiz_wall: bool = rng.gen();
+        let lowest: bool = rng.gen();
+        if horiz_wall {
+            point.0 = rng.gen_range(self.x1+1..self.x2);
+            if !lowest {
+                point.1 = self.y2;
+            }
+        } else {
+            point.1 = rng.gen_range(self.y1+1..self.y2);
+            if !lowest {
+                point.0 = self.x2;
+            }
+        }
+        point
+    }
+
     fn shrink(&mut self, amount: u32) {
         self.x1 += amount;
         self.y1 += amount;
@@ -480,8 +498,8 @@ fn main() {
     let roads = full_rect.divide_with_lines(map.road_count, map.road_margin(), &mut rng);
 
     let dirt_tile = tiles.crop_imm(32, 0, map.tile_size, map.tile_size);
-    let car_h_tile = tiles.crop_imm(192, 0, 64, 32);
-    let car_v_tile = tiles.crop_imm(160, 0, 32, 64);
+    let car_h_tile = tiles.crop_imm(64, 32, 64, 32);
+    let car_v_tile = tiles.crop_imm(128, 0, 32, 64);
 
     for road in &roads {
         let mut x = road.x;
@@ -532,23 +550,42 @@ fn main() {
     println!("start buildings");
 
     let floor_tile = tiles.crop_imm(96, 0, map.tile_size, map.tile_size);
-    let wall_nw_tile = tiles.crop_imm(0, 64, map.tile_size, map.tile_size);
-    let wall_ne_tile = tiles.crop_imm(32, 64, map.tile_size, map.tile_size);
-    let wall_sw_tile = tiles.crop_imm(64, 64, map.tile_size, map.tile_size);
-    let wall_se_tile = tiles.crop_imm(96, 64, map.tile_size, map.tile_size);
-    let wall_n_tile = tiles.crop_imm(128, 64, map.tile_size, map.tile_size);
-    let wall_s_tile = tiles.crop_imm(160, 64, map.tile_size, map.tile_size);
-    let wall_w_tile = tiles.crop_imm(192, 64, map.tile_size, map.tile_size);
-    let wall_e_tile = tiles.crop_imm(224, 64, map.tile_size, map.tile_size);
+    let wall_nw_tile = tiles.crop_imm(0, 96, map.tile_size, map.tile_size);
+    let wall_ne_tile = tiles.crop_imm(32, 96, map.tile_size, map.tile_size);
+    let wall_sw_tile = tiles.crop_imm(64, 96, map.tile_size, map.tile_size);
+    let wall_se_tile = tiles.crop_imm(96, 96, map.tile_size, map.tile_size);
+    let wall_n_tile = tiles.crop_imm(128, 96, map.tile_size, map.tile_size);
+    let wall_s_tile = tiles.crop_imm(160, 96, map.tile_size, map.tile_size);
+    let wall_w_tile = tiles.crop_imm(192, 96, map.tile_size, map.tile_size);
+    let wall_e_tile = tiles.crop_imm(224, 96, map.tile_size, map.tile_size);
+    let door_w_tile = tiles.crop_imm(0, 64, map.tile_size, map.tile_size);
+    let door_n_tile = tiles.crop_imm(32, 64, map.tile_size, map.tile_size);
+    let door_e_tile = tiles.crop_imm(64, 64, map.tile_size, map.tile_size);
+    let door_s_tile = tiles.crop_imm(96, 64, map.tile_size, map.tile_size);
 
     for b in 0..map.building_count {
         println!("building {}", b);
         let mut building = obstructions.find_clear_rectangle(3, map.building_size, &mut rng);
         building.shrink(1);
+        let door_count = building.perimeter() / 20 + 1;
+        let mut doors = Vec::new();
+        for _d in 0..door_count {
+            doors.push(building.find_exterior_point(&mut rng));
+        }
         for x in building.x1..building.x2+1 {
             for y in building.y1..building.y2+1 {
                 image::imageops::overlay(&mut img, &floor_tile, x * map.tile_size, y * map.tile_size);
-                if x == building.x1 {
+                if doors.contains(&(x, y)) {
+                    if x == building.x1 {
+                        image::imageops::overlay(&mut img, &door_w_tile, x * map.tile_size, y * map.tile_size);
+                    } else if x == building.x2 {
+                        image::imageops::overlay(&mut img, &door_e_tile, x * map.tile_size, y * map.tile_size);
+                    } else if y == building.y1 {
+                        image::imageops::overlay(&mut img, &door_n_tile, x * map.tile_size, y * map.tile_size);
+                    } else {
+                        image::imageops::overlay(&mut img, &door_s_tile, x * map.tile_size, y * map.tile_size);
+                    }
+                } else if x == building.x1 {
                     if y == building.y1 {
                         image::imageops::overlay(&mut img, &wall_nw_tile, x * map.tile_size, y * map.tile_size);
                     } else if y == building.y2 {
@@ -596,7 +633,16 @@ fn main() {
                 door = rng.gen_range(1..draw_length-2);
             }
             for l in 0..draw_length {
-                if l != door {
+                if l == door {
+                    match wall.orientation {
+                        Orientation::Horiz => {
+                            image::imageops::overlay(&mut img, &door_n_tile, (wall.x + l) * map.tile_size, wall.y * map.tile_size);
+                        },
+                        Orientation::Vert => {
+                            image::imageops::overlay(&mut img, &door_w_tile, wall.x * map.tile_size, (wall.y + l) * map.tile_size);
+                        }
+                    }
+                } else {
                     match wall.orientation {
                         Orientation::Horiz => {
                             image::imageops::overlay(&mut img, &wall_n_tile, (wall.x + l) * map.tile_size, wall.y * map.tile_size);
@@ -614,7 +660,7 @@ fn main() {
 
     println!("start obstacles");
 
-    let bush_tile = tiles.crop_imm(128, 0, map.tile_size, map.tile_size);
+    let bush_tile = tiles.crop_imm(32, 32, map.tile_size, map.tile_size);
     let obstacles = obstructions.get_unobstructed_count() / 50;
     for _o in 0..obstacles {
         let coords = obstructions.find_clear_tile(&mut rng);
