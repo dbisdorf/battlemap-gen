@@ -6,7 +6,7 @@ use base64;
 use clap::Parser;
 use std::cmp::{min, max};
 
-const MIN_ROOM_SIZE: u32 = 4;
+const TILE_SIZE: u32 = 32;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -15,7 +15,19 @@ struct Args {
     width: u8,
 
     #[clap(short, long, default_value_t = 48)]
-    height: u8
+    height: u8,
+
+    #[clap(short, long, default_value_t = 6)]
+    road_count: u8,
+
+    #[clap(short = 'R', long, default_value_t = 2)]
+    road_width: u8,
+
+    #[clap(short, long, default_value_t = 6)]
+    building_count: u8,
+
+    #[clap(short = 'B', long, default_value_t = 16)]
+    building_size: u8
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -131,7 +143,7 @@ impl Rectangle {
                 if self.height() <= line_margin * 2 {
                     vert = true;
                 }
-                println!("width {} height {}", self.width(), self.height());
+                //println!("width {} height {}", self.width(), self.height());
                 if vert {
                     // vertical road
                     line.orientation = Orientation::Vert;
@@ -160,14 +172,14 @@ impl Rectangle {
                     if lines[origin_road_num].length > line_margin * 2 {
                         line.orientation = opposite_orientation(lines[origin_road_num].orientation);
                         let intersection = lines[origin_road_num].find_point_within(line_margin, rng);
-                        println!("rect {} {} {} {} origin road {} {} {}", self.x1, self.y1, self.x2, self.y2, lines[origin_road_num].x, lines[origin_road_num].y, lines[origin_road_num].length);
+                        //println!("rect {} {} {} {} origin road {} {} {}", self.x1, self.y1, self.x2, self.y2, lines[origin_road_num].x, lines[origin_road_num].y, lines[origin_road_num].length);
                         let mut low_bound = self.x1;
                         let mut high_bound = self.x2;
                         if line.orientation == Orientation::Vert {
                             low_bound = self.y1;
                             high_bound = self.y2;
                         }
-                        println!("intersection {} {} low bound {}", intersection.x, intersection.y, low_bound);
+                        //println!("intersection {} {} low bound {}", intersection.x, intersection.y, low_bound);
                         for other_road_num in 0..lines.len() {
                             if other_road_num != origin_road_num {
                                 if lines[other_road_num].point_intersects(&intersection) {
@@ -175,22 +187,22 @@ impl Rectangle {
                                 } else if lines[other_road_num].orientation != line.orientation {
                                     match line.orientation {
                                         Orientation::Horiz => {
-                                            println!("horiz {} {}", line.y, line.length);
+                                            //println!("horiz {} {}", line.y, line.length);
                                             if lines[other_road_num].y <= intersection.y && lines[other_road_num].y + lines[other_road_num].length - 1 >= intersection.y {
                                                 if lines[other_road_num].x < intersection.x && lines[other_road_num].x > low_bound {
                                                     low_bound = lines[other_road_num].x;
-                                                    println!("set low bound to {}", low_bound);
+                                                    //println!("set low bound to {}", low_bound);
                                                 } else if lines[other_road_num].x > intersection.x && lines[other_road_num].x < high_bound {
                                                     high_bound = lines[other_road_num].x;
                                                 }
                                             }
                                         },
                                         Orientation::Vert => {
-                                            println!("vert {} {}", line.x, line.length);
+                                            //println!("vert {} {}", line.x, line.length);
                                             if lines[other_road_num].x <= intersection.x && lines[other_road_num].x + lines[other_road_num].length - 1 >= intersection.x {
                                                 if lines[other_road_num].y < intersection.y && lines[other_road_num].y > low_bound {
                                                     low_bound = lines[other_road_num].y;
-                                                    println!("set low bound to {}", low_bound);
+                                                    //println!("set low bound to {}", low_bound);
                                                 } else if lines[other_road_num].y > intersection.y && lines[other_road_num].y < high_bound {
                                                     high_bound = lines[other_road_num].y;
                                                 }
@@ -204,7 +216,7 @@ impl Rectangle {
                             let mut before = true;
                             match line.orientation {
                                 Orientation::Horiz => {
-                                    println!("horiz x {} low {} high {}", intersection.x, low_bound, high_bound);
+                                    //println!("horiz x {} low {} high {}", intersection.x, low_bound, high_bound);
                                     if intersection.x - low_bound < line_margin {
                                         before = false;
                                     } else if high_bound - intersection.x < line_margin {
@@ -222,7 +234,7 @@ impl Rectangle {
                                     }
                                 },
                                 Orientation::Vert => {
-                                    println!("vert y {} low {} high {}", intersection.y, low_bound, high_bound);
+                                    //println!("vert y {} low {} high {}", intersection.y, low_bound, high_bound);
                                     if intersection.y - low_bound < line_margin {
                                         before = false;
                                     } else if high_bound - intersection.y < line_margin {
@@ -244,7 +256,7 @@ impl Rectangle {
                     }
                 }
             }
-            println!("new line {} {} {}", line.x, line.y, line.length);
+            //println!("new line {} {} {}", line.x, line.y, line.length);
             lines.push(line);
         }
     
@@ -286,7 +298,7 @@ impl Rectangle {
     }
 
     fn intersection_with(&self, other_rect: Rectangle) -> Rectangle {
-        println!("intersection {} {} {} {} / {} {} {} {}", self.x1, self.y1, self.x2, self.y2, other_rect.x1, other_rect.y1, other_rect.x2, other_rect.y2);
+        //println!("intersection {} {} {} {} / {} {} {} {}", self.x1, self.y1, self.x2, self.y2, other_rect.x1, other_rect.y1, other_rect.x2, other_rect.y2);
         let mut intersection = *self;
         if other_rect.x1 > intersection.x1 {
             intersection.x1 = other_rect.x1;
@@ -436,7 +448,7 @@ impl Obstructions {
                 let mut growing_x = true;
                 let mut growing_y = true;
                 while growing_x || growing_y {
-                    println!("looping");
+                    //println!("looping");
                     if growing_x {
                         if point.x > size_x + 2 && point.x + size_x < self.w - 3 && size_x < max_size / 2 {
                             size_x += 1;
@@ -460,7 +472,7 @@ impl Obstructions {
                 }
             }
         }
-        println!("clear rectangle point {} {} size {} {}", point.x, point.y, size_x, size_y);
+        //println!("clear rectangle point {} {} size {} {}", point.x, point.y, size_x, size_y);
         Rectangle {x1: point.x - size_x, y1: point.y - size_y, x2: point.x + size_x, y2: point.y + size_y }
     }    
 }
@@ -475,7 +487,6 @@ fn opposite_orientation(original: Orientation) -> Orientation {
 struct BattleMap {
     w: u32,
     h: u32,
-    tile_size: u32,
     road_count: u32,
     road_width: u32,
     building_count: u32,
@@ -487,7 +498,6 @@ impl BattleMap {
         BattleMap {
             w: 48, 
             h: 48, 
-            tile_size: 32, 
             road_count: 6, 
             road_width: 2, 
             building_count: 6, 
@@ -496,7 +506,7 @@ impl BattleMap {
     }
 
     fn pixel_dimensions(&self) -> (u32, u32) {
-        (self.w * self.tile_size, self.h * self.tile_size)
+        (self.w * TILE_SIZE, self.h * TILE_SIZE)
     }
 
     fn road_margin(&self) -> u32 {
@@ -522,11 +532,11 @@ impl BattleMap {
     
         // dirt
     
-        let dirt_tile = image::imageops::crop(&mut tiles, 0, 0, self.tile_size, self.tile_size);
+        let dirt_tile = image::imageops::crop(&mut tiles, 0, 0, TILE_SIZE, TILE_SIZE);
     
         for x in 0..self.w {
             for y in 0..self.h {
-                image::imageops::overlay(&mut img, &dirt_tile, x * self.tile_size, y * self.tile_size);
+                image::imageops::overlay(&mut img, &dirt_tile, x * TILE_SIZE, y * TILE_SIZE);
             }
         }
     
@@ -535,21 +545,21 @@ impl BattleMap {
         let full_rect = Rectangle{ x1: 0, y1: 0, x2: self.w - 1, y2: self.h - 1 };
         let roads = full_rect.divide_with_lines(self.road_count, self.road_margin(), &mut rng);
     
-        let dirt_tile = tiles.crop_imm(32, 0, self.tile_size, self.tile_size);
+        let dirt_tile = tiles.crop_imm(32, 0, TILE_SIZE, TILE_SIZE);
         let car_h_tile = tiles.crop_imm(64, 32, 64, 32);
         let car_v_tile = tiles.crop_imm(128, 0, 32, 64);
     
         for road in &roads {
             let mut x = road.x;
             let mut y = road.y;
-            println!("road origin {} {} {}", x, y, road.length);
+            //println!("road origin {} {} {}", x, y, road.length);
             for _t in 0..road.length {
                 obstructions.obstruct(x, y, true);
                 match road.orientation {
                     Orientation::Horiz => {
                         for w in 0..self.road_width {
-                            println!("overlay {} {} {}", x, y, w);
-                            image::imageops::overlay(&mut img, &dirt_tile, x * self.tile_size, (y - (self.road_width / 2) + w) * self.tile_size);
+                            //println!("overlay {} {} {}", x, y, w);
+                            image::imageops::overlay(&mut img, &dirt_tile, x * TILE_SIZE, (y - (self.road_width / 2) + w) * TILE_SIZE);
                         }
                         for w in 0..self.road_margin() {
                             obstructions.obstruct(x, y - w, true);
@@ -559,7 +569,7 @@ impl BattleMap {
                     },
                     Orientation::Vert => {
                         for w in 0..self.road_width {
-                            image::imageops::overlay(&mut img, &dirt_tile, (x - (self.road_width / 2) + w) * self.tile_size, y * self.tile_size);
+                            image::imageops::overlay(&mut img, &dirt_tile, (x - (self.road_width / 2) + w) * TILE_SIZE, y * TILE_SIZE);
                         }
                         for w in 0..self.road_margin() {
                             obstructions.obstruct(x - w, y, true);
@@ -575,9 +585,9 @@ impl BattleMap {
             if road.length > 4 {
                 let car = road.find_point_within(2, &mut rng);
                 if rng.gen::<bool>() {
-                    image::imageops::overlay(&mut img, &car_v_tile, car.x * self.tile_size, car.y * self.tile_size);    
+                    image::imageops::overlay(&mut img, &car_v_tile, car.x * TILE_SIZE, car.y * TILE_SIZE);    
                 } else {
-                    image::imageops::overlay(&mut img, &car_h_tile, car.x * self.tile_size, car.y * self.tile_size);    
+                    image::imageops::overlay(&mut img, &car_h_tile, car.x * TILE_SIZE, car.y * TILE_SIZE);    
                 }
                 
             }
@@ -585,25 +595,25 @@ impl BattleMap {
     
         // buildings
     
-        println!("start buildings");
+        //println!("start buildings");
     
-        let floor_tile = tiles.crop_imm(96, 0, self.tile_size, self.tile_size);
-        let wall_nw_tile = tiles.crop_imm(0, 96, self.tile_size, self.tile_size);
-        let wall_ne_tile = tiles.crop_imm(32, 96, self.tile_size, self.tile_size);
-        let wall_sw_tile = tiles.crop_imm(64, 96, self.tile_size, self.tile_size);
-        let wall_se_tile = tiles.crop_imm(96, 96, self.tile_size, self.tile_size);
-        let wall_n_tile = tiles.crop_imm(128, 96, self.tile_size, self.tile_size);
-        let wall_s_tile = tiles.crop_imm(160, 96, self.tile_size, self.tile_size);
-        let wall_w_tile = tiles.crop_imm(192, 96, self.tile_size, self.tile_size);
-        let wall_e_tile = tiles.crop_imm(224, 96, self.tile_size, self.tile_size);
-        let door_w_tile = tiles.crop_imm(0, 64, self.tile_size, self.tile_size);
-        let door_n_tile = tiles.crop_imm(32, 64, self.tile_size, self.tile_size);
-        let door_e_tile = tiles.crop_imm(64, 64, self.tile_size, self.tile_size);
-        let door_s_tile = tiles.crop_imm(96, 64, self.tile_size, self.tile_size);
-        let crate_tile = tiles.crop_imm(0, 32, self.tile_size, self.tile_size);
+        let floor_tile = tiles.crop_imm(96, 0, TILE_SIZE, TILE_SIZE);
+        let wall_nw_tile = tiles.crop_imm(0, 96, TILE_SIZE, TILE_SIZE);
+        let wall_ne_tile = tiles.crop_imm(32, 96, TILE_SIZE, TILE_SIZE);
+        let wall_sw_tile = tiles.crop_imm(64, 96, TILE_SIZE, TILE_SIZE);
+        let wall_se_tile = tiles.crop_imm(96, 96, TILE_SIZE, TILE_SIZE);
+        let wall_n_tile = tiles.crop_imm(128, 96, TILE_SIZE, TILE_SIZE);
+        let wall_s_tile = tiles.crop_imm(160, 96, TILE_SIZE, TILE_SIZE);
+        let wall_w_tile = tiles.crop_imm(192, 96, TILE_SIZE, TILE_SIZE);
+        let wall_e_tile = tiles.crop_imm(224, 96, TILE_SIZE, TILE_SIZE);
+        let door_w_tile = tiles.crop_imm(0, 64, TILE_SIZE, TILE_SIZE);
+        let door_n_tile = tiles.crop_imm(32, 64, TILE_SIZE, TILE_SIZE);
+        let door_e_tile = tiles.crop_imm(64, 64, TILE_SIZE, TILE_SIZE);
+        let door_s_tile = tiles.crop_imm(96, 64, TILE_SIZE, TILE_SIZE);
+        let crate_tile = tiles.crop_imm(0, 32, TILE_SIZE, TILE_SIZE);
     
         for b in 0..self.building_count {
-            println!("building {}", b);
+            //println!("building {}", b);
             let mut building = obstructions.find_clear_rectangle(3, self.building_size, &mut rng);
             building.shrink(1);
             let door_count = building.perimeter() / 20 + 1;
@@ -613,38 +623,38 @@ impl BattleMap {
             }
             for x in building.x1..building.x2+1 {
                 for y in building.y1..building.y2+1 {
-                    image::imageops::overlay(&mut img, &floor_tile, x * self.tile_size, y * self.tile_size);
+                    image::imageops::overlay(&mut img, &floor_tile, x * TILE_SIZE, y * TILE_SIZE);
                     let point = Point::new(x, y);
                     if doors.contains(&point) {
                         if x == building.x1 {
-                            image::imageops::overlay(&mut img, &door_w_tile, x * self.tile_size, y * self.tile_size);
+                            image::imageops::overlay(&mut img, &door_w_tile, x * TILE_SIZE, y * TILE_SIZE);
                         } else if x == building.x2 {
-                            image::imageops::overlay(&mut img, &door_e_tile, x * self.tile_size, y * self.tile_size);
+                            image::imageops::overlay(&mut img, &door_e_tile, x * TILE_SIZE, y * TILE_SIZE);
                         } else if y == building.y1 {
-                            image::imageops::overlay(&mut img, &door_n_tile, x * self.tile_size, y * self.tile_size);
+                            image::imageops::overlay(&mut img, &door_n_tile, x * TILE_SIZE, y * TILE_SIZE);
                         } else {
-                            image::imageops::overlay(&mut img, &door_s_tile, x * self.tile_size, y * self.tile_size);
+                            image::imageops::overlay(&mut img, &door_s_tile, x * TILE_SIZE, y * TILE_SIZE);
                         }
                     } else if x == building.x1 {
                         if y == building.y1 {
-                            image::imageops::overlay(&mut img, &wall_nw_tile, x * self.tile_size, y * self.tile_size);
+                            image::imageops::overlay(&mut img, &wall_nw_tile, x * TILE_SIZE, y * TILE_SIZE);
                         } else if y == building.y2 {
-                            image::imageops::overlay(&mut img, &wall_sw_tile, x * self.tile_size, y * self.tile_size);
+                            image::imageops::overlay(&mut img, &wall_sw_tile, x * TILE_SIZE, y * TILE_SIZE);
                         } else {
-                            image::imageops::overlay(&mut img, &wall_w_tile, x * self.tile_size, y * self.tile_size);
+                            image::imageops::overlay(&mut img, &wall_w_tile, x * TILE_SIZE, y * TILE_SIZE);
                         }
                     } else if x == building.x2 {
                         if y == building.y1 {
-                            image::imageops::overlay(&mut img, &wall_ne_tile, x * self.tile_size, y * self.tile_size);
+                            image::imageops::overlay(&mut img, &wall_ne_tile, x * TILE_SIZE, y * TILE_SIZE);
                         } else if y == building.y2 {
-                            image::imageops::overlay(&mut img, &wall_se_tile, x * self.tile_size, y * self.tile_size);
+                            image::imageops::overlay(&mut img, &wall_se_tile, x * TILE_SIZE, y * TILE_SIZE);
                         } else {
-                            image::imageops::overlay(&mut img, &wall_e_tile, x * self.tile_size, y * self.tile_size);
+                            image::imageops::overlay(&mut img, &wall_e_tile, x * TILE_SIZE, y * TILE_SIZE);
                         }
                     } else if y == building.y1 {
-                        image::imageops::overlay(&mut img, &wall_n_tile, x * self.tile_size, y * self.tile_size);
+                        image::imageops::overlay(&mut img, &wall_n_tile, x * TILE_SIZE, y * TILE_SIZE);
                     } else if y == building.y2 {
-                        image::imageops::overlay(&mut img, &wall_s_tile, x * self.tile_size, y * self.tile_size);
+                        image::imageops::overlay(&mut img, &wall_s_tile, x * TILE_SIZE, y * TILE_SIZE);
                     }    
                     obstructions.obstruct(x, y, true);
                 }
@@ -676,19 +686,19 @@ impl BattleMap {
                     if l == door {
                         match wall.orientation {
                             Orientation::Horiz => {
-                                image::imageops::overlay(&mut img, &door_n_tile, (wall.x + l) * self.tile_size, wall.y * self.tile_size);
+                                image::imageops::overlay(&mut img, &door_n_tile, (wall.x + l) * TILE_SIZE, wall.y * TILE_SIZE);
                             },
                             Orientation::Vert => {
-                                image::imageops::overlay(&mut img, &door_w_tile, wall.x * self.tile_size, (wall.y + l) * self.tile_size);
+                                image::imageops::overlay(&mut img, &door_w_tile, wall.x * TILE_SIZE, (wall.y + l) * TILE_SIZE);
                             }
                         }
                     } else {
                         match wall.orientation {
                             Orientation::Horiz => {
-                                image::imageops::overlay(&mut img, &wall_n_tile, (wall.x + l) * self.tile_size, wall.y * self.tile_size);
+                                image::imageops::overlay(&mut img, &wall_n_tile, (wall.x + l) * TILE_SIZE, wall.y * TILE_SIZE);
                             },
                             Orientation::Vert => {
-                                image::imageops::overlay(&mut img, &wall_w_tile, wall.x * self.tile_size, (wall.y + l) * self.tile_size);
+                                image::imageops::overlay(&mut img, &wall_w_tile, wall.x * TILE_SIZE, (wall.y + l) * TILE_SIZE);
                             }
                         }    
                     }
@@ -708,27 +718,27 @@ impl BattleMap {
                         }
                     }
                 }
-                image::imageops::overlay(&mut img, &crate_tile, thing.x * self.tile_size, thing.y * self.tile_size);
+                image::imageops::overlay(&mut img, &crate_tile, thing.x * TILE_SIZE, thing.y * TILE_SIZE);
             }
         }
     
         // outdoor obstacles
     
-        println!("start obstacles");
+        //println!("start obstacles");
     
-        let bush_tile = tiles.crop_imm(32, 32, self.tile_size, self.tile_size);
+        let bush_tile = tiles.crop_imm(32, 32, TILE_SIZE, TILE_SIZE);
         let obstacles = obstructions.get_unobstructed_count() / 50;
         for _o in 0..obstacles {
             let coords = obstructions.find_clear_tile(&mut rng);
             obstructions.obstruct(coords.0, coords.1, true);
-            image::imageops::overlay(&mut img, &bush_tile, coords.0 * self.tile_size, coords.1 * self.tile_size);
+            image::imageops::overlay(&mut img, &bush_tile, coords.0 * TILE_SIZE, coords.1 * TILE_SIZE);
         }
     
         // grid
     
         for x in 0..img.width() {
             for y in 0..img.height() {
-                if x % self.tile_size == 0 || y % self.tile_size == 0 {
+                if x % TILE_SIZE == 0 || y % TILE_SIZE == 0 {
                     let pixel = img.get_pixel_mut(x, y);
                     //let image::Rgba(data) = *pixel;
                     *pixel = image::Rgba([128, 128, 128, 255]);
@@ -754,17 +764,23 @@ impl BattleMap {
 // main program function
 
 fn main() {
-    println!("Apocalypsing...");
+    //println!("Apocalypsing...");
 
     let args = Args::parse();
 
     let mut map = BattleMap::new();
     map.w = args.width as u32;
     map.h = args.height as u32;
+    map.road_count = args.road_count as u32;
+    map.road_width = args.road_width as u32;
+    map.building_count = args.building_count as u32;
+    map.building_size = args.building_size as u32;
 
     let img_bytes = map.generate();
     let img_b64 = base64::encode(img_bytes);
 
-    println!("<html><body><p>Hello world</p><img src=\"data:image/png;base64,{}\"></body></html>", img_b64);    
+    //println!("<html><body><p>Hello world</p><img src=\"data:image/png;base64,{}\"></body></html>", img_b64);
+    println!("Content-type: text/plain\n");
+    println!("{}", img_b64);
 }
 
