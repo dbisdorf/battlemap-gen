@@ -2,10 +2,12 @@ use image::{DynamicImage, RgbaImage};
 use image::io::Reader;
 use rand::{thread_rng, Rng};
 use rand::rngs::ThreadRng;
-use base64;
 use clap::Parser;
 use std::cmp::{min, max};
+use std::env;
 
+const WEB_MODE_VAR: &str = "BATTLEMAPPER_WEB";
+const WEB_QUERY_VAR: &str = "QUERY_STRING";
 const TILE_SIZE: u32 = 32;
 
 #[derive(Parser, Debug)]
@@ -490,18 +492,20 @@ struct BattleMap {
     road_count: u32,
     road_width: u32,
     building_count: u32,
-    building_size: u32
+    building_size: u32,
+    img: RgbaImage
 }
 
 impl BattleMap {
-    fn new() -> BattleMap {
+    fn new(w: u32, h: u32, road_count: u32, road_width: u32, building_count: u32, building_size: u32 ) -> BattleMap {        
         BattleMap {
-            w: 48, 
-            h: 48, 
-            road_count: 6, 
-            road_width: 2, 
-            building_count: 6, 
-            building_size: 16
+            w, 
+            h, 
+            road_count, 
+            road_width, 
+            building_count, 
+            building_size,
+            img: RgbaImage::new(w * TILE_SIZE, h * TILE_SIZE)
         }
     }
 
@@ -513,19 +517,19 @@ impl BattleMap {
         self.road_width / 2 + 1
     }
 
-    fn generate(&mut self) -> Vec<u8> {
+    fn generate(&mut self) {
         let mut bytes: Vec<u8> = Vec::new();
         let mut rng = thread_rng();
         let dim = self.pixel_dimensions();
-        let mut img = RgbaImage::new(dim.0, dim.1);
+        self.img = RgbaImage::new(dim.0, dim.1);
 
         let raw_tiles = match Reader::open("gfx/tiles.png") {
             Ok(raw_tiles) => raw_tiles,
-            Err(_e) => return bytes
+            Err(_e) => return
         };
         let mut tiles = match raw_tiles.decode() {
             Ok(tiles) => tiles,
-            Err(_e) => return bytes
+            Err(_e) => return
         };
     
         let mut obstructions = Obstructions::new(self.w, self.h);
@@ -536,7 +540,7 @@ impl BattleMap {
     
         for x in 0..self.w {
             for y in 0..self.h {
-                image::imageops::overlay(&mut img, &dirt_tile, x * TILE_SIZE, y * TILE_SIZE);
+                image::imageops::overlay(&mut self.img, &dirt_tile, x * TILE_SIZE, y * TILE_SIZE);
             }
         }
     
@@ -559,7 +563,7 @@ impl BattleMap {
                     Orientation::Horiz => {
                         for w in 0..self.road_width {
                             //println!("overlay {} {} {}", x, y, w);
-                            image::imageops::overlay(&mut img, &dirt_tile, x * TILE_SIZE, (y - (self.road_width / 2) + w) * TILE_SIZE);
+                            image::imageops::overlay(&mut self.img, &dirt_tile, x * TILE_SIZE, (y - (self.road_width / 2) + w) * TILE_SIZE);
                         }
                         for w in 0..self.road_margin() {
                             obstructions.obstruct(x, y - w, true);
@@ -569,7 +573,7 @@ impl BattleMap {
                     },
                     Orientation::Vert => {
                         for w in 0..self.road_width {
-                            image::imageops::overlay(&mut img, &dirt_tile, (x - (self.road_width / 2) + w) * TILE_SIZE, y * TILE_SIZE);
+                            image::imageops::overlay(&mut self.img, &dirt_tile, (x - (self.road_width / 2) + w) * TILE_SIZE, y * TILE_SIZE);
                         }
                         for w in 0..self.road_margin() {
                             obstructions.obstruct(x - w, y, true);
@@ -585,9 +589,9 @@ impl BattleMap {
             if road.length > 4 {
                 let car = road.find_point_within(2, &mut rng);
                 if rng.gen::<bool>() {
-                    image::imageops::overlay(&mut img, &car_v_tile, car.x * TILE_SIZE, car.y * TILE_SIZE);    
+                    image::imageops::overlay(&mut self.img, &car_v_tile, car.x * TILE_SIZE, car.y * TILE_SIZE);    
                 } else {
-                    image::imageops::overlay(&mut img, &car_h_tile, car.x * TILE_SIZE, car.y * TILE_SIZE);    
+                    image::imageops::overlay(&mut self.img, &car_h_tile, car.x * TILE_SIZE, car.y * TILE_SIZE);    
                 }
                 
             }
@@ -623,38 +627,38 @@ impl BattleMap {
             }
             for x in building.x1..building.x2+1 {
                 for y in building.y1..building.y2+1 {
-                    image::imageops::overlay(&mut img, &floor_tile, x * TILE_SIZE, y * TILE_SIZE);
+                    image::imageops::overlay(&mut self.img, &floor_tile, x * TILE_SIZE, y * TILE_SIZE);
                     let point = Point::new(x, y);
                     if doors.contains(&point) {
                         if x == building.x1 {
-                            image::imageops::overlay(&mut img, &door_w_tile, x * TILE_SIZE, y * TILE_SIZE);
+                            image::imageops::overlay(&mut self.img, &door_w_tile, x * TILE_SIZE, y * TILE_SIZE);
                         } else if x == building.x2 {
-                            image::imageops::overlay(&mut img, &door_e_tile, x * TILE_SIZE, y * TILE_SIZE);
+                            image::imageops::overlay(&mut self.img, &door_e_tile, x * TILE_SIZE, y * TILE_SIZE);
                         } else if y == building.y1 {
-                            image::imageops::overlay(&mut img, &door_n_tile, x * TILE_SIZE, y * TILE_SIZE);
+                            image::imageops::overlay(&mut self.img, &door_n_tile, x * TILE_SIZE, y * TILE_SIZE);
                         } else {
-                            image::imageops::overlay(&mut img, &door_s_tile, x * TILE_SIZE, y * TILE_SIZE);
+                            image::imageops::overlay(&mut self.img, &door_s_tile, x * TILE_SIZE, y * TILE_SIZE);
                         }
                     } else if x == building.x1 {
                         if y == building.y1 {
-                            image::imageops::overlay(&mut img, &wall_nw_tile, x * TILE_SIZE, y * TILE_SIZE);
+                            image::imageops::overlay(&mut self.img, &wall_nw_tile, x * TILE_SIZE, y * TILE_SIZE);
                         } else if y == building.y2 {
-                            image::imageops::overlay(&mut img, &wall_sw_tile, x * TILE_SIZE, y * TILE_SIZE);
+                            image::imageops::overlay(&mut self.img, &wall_sw_tile, x * TILE_SIZE, y * TILE_SIZE);
                         } else {
-                            image::imageops::overlay(&mut img, &wall_w_tile, x * TILE_SIZE, y * TILE_SIZE);
+                            image::imageops::overlay(&mut self.img, &wall_w_tile, x * TILE_SIZE, y * TILE_SIZE);
                         }
                     } else if x == building.x2 {
                         if y == building.y1 {
-                            image::imageops::overlay(&mut img, &wall_ne_tile, x * TILE_SIZE, y * TILE_SIZE);
+                            image::imageops::overlay(&mut self.img, &wall_ne_tile, x * TILE_SIZE, y * TILE_SIZE);
                         } else if y == building.y2 {
-                            image::imageops::overlay(&mut img, &wall_se_tile, x * TILE_SIZE, y * TILE_SIZE);
+                            image::imageops::overlay(&mut self.img, &wall_se_tile, x * TILE_SIZE, y * TILE_SIZE);
                         } else {
-                            image::imageops::overlay(&mut img, &wall_e_tile, x * TILE_SIZE, y * TILE_SIZE);
+                            image::imageops::overlay(&mut self.img, &wall_e_tile, x * TILE_SIZE, y * TILE_SIZE);
                         }
                     } else if y == building.y1 {
-                        image::imageops::overlay(&mut img, &wall_n_tile, x * TILE_SIZE, y * TILE_SIZE);
+                        image::imageops::overlay(&mut self.img, &wall_n_tile, x * TILE_SIZE, y * TILE_SIZE);
                     } else if y == building.y2 {
-                        image::imageops::overlay(&mut img, &wall_s_tile, x * TILE_SIZE, y * TILE_SIZE);
+                        image::imageops::overlay(&mut self.img, &wall_s_tile, x * TILE_SIZE, y * TILE_SIZE);
                     }    
                     obstructions.obstruct(x, y, true);
                 }
@@ -686,19 +690,19 @@ impl BattleMap {
                     if l == door {
                         match wall.orientation {
                             Orientation::Horiz => {
-                                image::imageops::overlay(&mut img, &door_n_tile, (wall.x + l) * TILE_SIZE, wall.y * TILE_SIZE);
+                                image::imageops::overlay(&mut self.img, &door_n_tile, (wall.x + l) * TILE_SIZE, wall.y * TILE_SIZE);
                             },
                             Orientation::Vert => {
-                                image::imageops::overlay(&mut img, &door_w_tile, wall.x * TILE_SIZE, (wall.y + l) * TILE_SIZE);
+                                image::imageops::overlay(&mut self.img, &door_w_tile, wall.x * TILE_SIZE, (wall.y + l) * TILE_SIZE);
                             }
                         }
                     } else {
                         match wall.orientation {
                             Orientation::Horiz => {
-                                image::imageops::overlay(&mut img, &wall_n_tile, (wall.x + l) * TILE_SIZE, wall.y * TILE_SIZE);
+                                image::imageops::overlay(&mut self.img, &wall_n_tile, (wall.x + l) * TILE_SIZE, wall.y * TILE_SIZE);
                             },
                             Orientation::Vert => {
-                                image::imageops::overlay(&mut img, &wall_w_tile, wall.x * TILE_SIZE, (wall.y + l) * TILE_SIZE);
+                                image::imageops::overlay(&mut self.img, &wall_w_tile, wall.x * TILE_SIZE, (wall.y + l) * TILE_SIZE);
                             }
                         }    
                     }
@@ -718,7 +722,7 @@ impl BattleMap {
                         }
                     }
                 }
-                image::imageops::overlay(&mut img, &crate_tile, thing.x * TILE_SIZE, thing.y * TILE_SIZE);
+                image::imageops::overlay(&mut self.img, &crate_tile, thing.x * TILE_SIZE, thing.y * TILE_SIZE);
             }
         }
     
@@ -731,15 +735,15 @@ impl BattleMap {
         for _o in 0..obstacles {
             let coords = obstructions.find_clear_tile(&mut rng);
             obstructions.obstruct(coords.0, coords.1, true);
-            image::imageops::overlay(&mut img, &bush_tile, coords.0 * TILE_SIZE, coords.1 * TILE_SIZE);
+            image::imageops::overlay(&mut self.img, &bush_tile, coords.0 * TILE_SIZE, coords.1 * TILE_SIZE);
         }
     
         // grid
     
-        for x in 0..img.width() {
-            for y in 0..img.height() {
+        for x in 0..self.img.width() {
+            for y in 0..self.img.height() {
                 if x % TILE_SIZE == 0 || y % TILE_SIZE == 0 {
-                    let pixel = img.get_pixel_mut(x, y);
+                    let pixel = self.img.get_pixel_mut(x, y);
                     //let image::Rgba(data) = *pixel;
                     *pixel = image::Rgba([128, 128, 128, 255]);
                 }
@@ -749,15 +753,28 @@ impl BattleMap {
         // done, save
     
         /*
-        match img.save("map.png") {
+        match self.img.save("map.png") {
             Ok(_ok) => (),
             Err(_err) => ()
         } 
         */
+    }
 
-        let dyn_img = DynamicImage::ImageRgba8(img);
-        dyn_img.write_to(&mut bytes, image::ImageOutputFormat::Png);
-        bytes
+    fn base64(&self)-> String {
+        let mut bytes: Vec<u8> = Vec::new();
+        let temp_img = RgbaImage::from_vec(self.w * TILE_SIZE, self.h * TILE_SIZE, self.img.as_raw().to_vec());
+        match temp_img {
+            Some(img) => {
+                let dyn_img = DynamicImage::ImageRgba8(img);
+                dyn_img.write_to(&mut bytes, image::ImageOutputFormat::Png);        
+            },
+            None => {}
+        }
+        base64::encode(bytes)
+    }
+
+    fn save_to(&self, filename: &str) {
+        self.img.save(filename);
     }
 }
 
@@ -766,21 +783,49 @@ impl BattleMap {
 fn main() {
     //println!("Apocalypsing...");
 
-    let args = Args::parse();
+    let mut args = Args::parse();
 
-    let mut map = BattleMap::new();
-    map.w = args.width as u32;
-    map.h = args.height as u32;
-    map.road_count = args.road_count as u32;
-    map.road_width = args.road_width as u32;
-    map.building_count = args.building_count as u32;
-    map.building_size = args.building_size as u32;
+    let mut web_mode = false;
+    match env::var(WEB_MODE_VAR) {
+        Ok(val) => { web_mode = val.eq("1") },
+        Err(_err) => {}
+    }
 
-    let img_bytes = map.generate();
-    let img_b64 = base64::encode(img_bytes);
+    if web_mode {
+        match env::var(WEB_QUERY_VAR) {
+            Ok(val) => { 
+                let mut env_args: Vec<&str> = val.split('&').collect();
+                env_args.insert(0, "");
+                eprintln!("{:?}", env_args);
+                args = Args::parse_from(env_args);
+            },
+            Err(_err) => {}
+        }
+    }
+
+    eprintln!("args {:?}", args);
+
+    let mut map = BattleMap::new(
+        args.width as u32,
+        args.height as u32,
+        args.road_count as u32,
+        args.road_width as u32,
+        args.building_count as u32,
+        args.building_size as u32
+    );
+
+    eprintln!("{} {}", map.w, map.h);
+
+    map.generate();
+
+    if web_mode {
+        let img_b64 = map.base64();
+        println!("Content-type: text/plain\n");
+        println!("{}", img_b64);    
+    } else {
+        map.save_to("map.png");
+    }
 
     //println!("<html><body><p>Hello world</p><img src=\"data:image/png;base64,{}\"></body></html>", img_b64);
-    println!("Content-type: text/plain\n");
-    println!("{}", img_b64);
 }
 
