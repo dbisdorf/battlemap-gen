@@ -1,9 +1,14 @@
 <html>
     <body>
         <script src="mapgen.js"></script>
+        <h1>Battlemapper</h1>
         <p>
-            <input type="button" id="makemap" value="Big Map" onclick="get_image(48, 48, 4, 6)">
-            <input type="button" id="makemap" value="Small Map" onclick="get_image(24, 24, 1, 2)">
+            <input type="button" id="makemap" value="Lone Building" onclick="get_image(16, 16, 0, 1)">
+            <input type="button" id="makemap" value="Roadside Shacks" onclick="get_image(24, 24, 1, 2)">
+            <input type="button" id="makemap" value="Downtown" onclick="get_image(48, 48, 4, 6)">
+        </p>
+        <p id="status">
+            Greetings!
         </p>
         <img id="map">
     </body>

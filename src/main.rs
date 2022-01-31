@@ -9,6 +9,7 @@ use std::env;
 const WEB_MODE_VAR: &str = "BATTLEMAPPER_WEB";
 const WEB_QUERY_VAR: &str = "QUERY_STRING";
 const TILE_SIZE: u32 = 32;
+const DONE_RETRYING: u8 = 100;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -136,6 +137,7 @@ impl Rectangle {
     fn divide_with_lines(&self, line_count: u32, line_margin: u32, rng: &mut ThreadRng) -> Vec<Line> {
         let mut lines: Vec<Line> = Vec::new();
         for _r in 0..line_count {
+            let mut good_line = true;
             let mut line = Line{x: self.x1, y: self.y1, length: 0, orientation: Orientation::Horiz};
             if lines.is_empty() {
                 let mut vert: bool = rng.gen();
@@ -167,9 +169,9 @@ impl Rectangle {
                 }
             } else {
                 let mut origin_road_num = 0;
-                let mut retrying = true;
-                while retrying {
-                    retrying = false;
+                let mut retries = 0;
+                while retries < DONE_RETRYING {
+                    retries += 1;
                     origin_road_num = rng.gen_range(0..lines.len());
                     if lines[origin_road_num].length > line_margin * 2 {
                         line.orientation = opposite_orientation(lines[origin_road_num].orientation);
@@ -185,7 +187,7 @@ impl Rectangle {
                         for other_road_num in 0..lines.len() {
                             if other_road_num != origin_road_num {
                                 if lines[other_road_num].point_intersects(&intersection) {
-                                    retrying = true;
+                                    good_line = false;
                                 } else if lines[other_road_num].orientation != line.orientation {
                                     match line.orientation {
                                         Orientation::Horiz => {
@@ -214,7 +216,7 @@ impl Rectangle {
                                 }
                             }
                         }
-                        if !retrying {
+                        if good_line {
                             let mut before = true;
                             match line.orientation {
                                 Orientation::Horiz => {
@@ -254,12 +256,15 @@ impl Rectangle {
                                     }
                                 }
                             };
+                            retries = DONE_RETRYING;
                         }
                     }
                 }
             }
             //println!("new line {} {} {}", line.x, line.y, line.length);
-            lines.push(line);
+            if good_line {
+                lines.push(line);
+            }
         }
     
         lines
@@ -417,15 +422,15 @@ impl Obstructions {
     }
 
     fn find_clear_tile(&self, rng: &mut ThreadRng) -> (u32, u32) {
-        let mut choosing = true;
         let mut x = 0;
         let mut y = 0;
-        while choosing {
-            choosing = false;
+        let mut retries = 0;
+        while retries < DONE_RETRYING {
+            retries += 1;
             x = rng.gen_range(0..self.w);
             y = rng.gen_range(0..self.h);
-            if self.is_obstructed(x, y) {
-                choosing = true;
+            if !self.is_obstructed(x, y) {
+                retries = DONE_RETRYING;
             }
         }
         (x, y)
@@ -438,15 +443,14 @@ impl Obstructions {
         let mut size_x = min_size;
         let mut size_y = min_size;
         let mut point = Point::new(0, 0);
+        let mut retries = 0;
 
-        while !ok {
-            ok = true;
+        while retries < DONE_RETRYING {
+            retries += 1;
     
             point = outer_bounds.find_point_within(min_size + 1, rng);
             //println!("rect {} {} {} {} point {} {}", rectangle.x1, rectangle.y1, rectangle.x2, rectangle.y2, point.0, point.1);
-            if self.obstructed_rectangle(&Rectangle {x1: point.x - size_x - 1, y1: point.y - size_y - 1, x2: point.x + size_x + 1, y2: point.y + size_y + 1 }) {
-                ok = false;
-            } else {
+            if !self.obstructed_rectangle(&Rectangle {x1: point.x - size_x - 1, y1: point.y - size_y - 1, x2: point.x + size_x + 1, y2: point.y + size_y + 1 }) {
                 let mut growing_x = true;
                 let mut growing_y = true;
                 while growing_x || growing_y {
@@ -472,6 +476,7 @@ impl Obstructions {
                         }
                     }
                 }
+                retries = DONE_RETRYING;
             }
         }
         //println!("clear rectangle point {} {} size {} {}", point.x, point.y, size_x, size_y);
@@ -712,17 +717,20 @@ impl BattleMap {
             let obstacles = building.area() / 50;
             for _o in 0..obstacles {
                 let mut thing = Point::new(0, 0);
-                let mut finding = true;
-                while finding {
-                    finding = false;
+                let mut retries = 0;
+                while retries < DONE_RETRYING {
                     thing = building.find_point_within(1, &mut rng);
+                    let mut occupied = false;
                     for wall in &walls {
                         if wall.point_intersects(&thing) {
-                            finding = true;
+                            occupied = true;
                         }
                     }
+                    if !occupied {
+                        image::imageops::overlay(&mut self.img, &crate_tile, thing.x * TILE_SIZE, thing.y * TILE_SIZE);
+                        retries = DONE_RETRYING;
+                    }
                 }
-                image::imageops::overlay(&mut self.img, &crate_tile, thing.x * TILE_SIZE, thing.y * TILE_SIZE);
             }
         }
     
@@ -731,7 +739,7 @@ impl BattleMap {
         //println!("start obstacles");
     
         let bush_tile = tiles.crop_imm(32, 32, TILE_SIZE, TILE_SIZE);
-        let obstacles = obstructions.get_unobstructed_count() / 50;
+        let obstacles = obstructions.get_unobstructed_count() / 30;
         for _o in 0..obstacles {
             let coords = obstructions.find_clear_tile(&mut rng);
             obstructions.obstruct(coords.0, coords.1, true);
@@ -796,14 +804,14 @@ fn main() {
             Ok(val) => { 
                 let mut env_args: Vec<&str> = val.split('&').collect();
                 env_args.insert(0, "");
-                eprintln!("{:?}", env_args);
+                //eprintln!("{:?}", env_args);
                 args = Args::parse_from(env_args);
             },
             Err(_err) => {}
         }
     }
 
-    eprintln!("args {:?}", args);
+    //eprintln!("args {:?}", args);
 
     let mut map = BattleMap::new(
         args.width as u32,
@@ -814,7 +822,7 @@ fn main() {
         args.building_size as u32
     );
 
-    eprintln!("{} {}", map.w, map.h);
+    //eprintln!("{} {}", map.w, map.h);
 
     map.generate();
 
