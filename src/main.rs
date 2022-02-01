@@ -30,7 +30,10 @@ struct Args {
     building_count: u8,
 
     #[clap(short = 'B', long, default_value_t = 16)]
-    building_size: u8
+    building_size: u8,
+
+    #[clap(short, long, default_value = "tiles.png")]
+    tile_file: String
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -39,7 +42,7 @@ enum Orientation {
     Vert
 }
 
-#[derive(PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 struct Point {
     x: u32,
     y: u32
@@ -400,6 +403,14 @@ impl Obstructions {
         self.tiles[t] = obstructed;
     }
 
+    fn obstruct_rectangle(&mut self, r: &Rectangle, obstructed: bool) {
+        for x in r.x1..r.x2+1 {
+            for y in r.y1..r.y2+1 {
+                self.obstruct(x, y, obstructed);
+            }
+        }
+    }
+
     fn is_obstructed(&self, x: u32, y: u32) -> bool {
         self.tiles[(y * self.w + x) as usize]
     }
@@ -442,13 +453,11 @@ impl Obstructions {
         let mut ok = false;
         let mut size_x = min_size;
         let mut size_y = min_size;
-        let mut point = Point::new(0, 0);
-        let mut retries = 0;
+        let start_point = Point::new(rng.gen_range(min_size+1..self.w-min_size-1), rng.gen_range(min_size+1..self.h-min_size-1));
+        let mut point = start_point;
+        let mut scanning = true;
 
-        while retries < DONE_RETRYING {
-            retries += 1;
-    
-            point = outer_bounds.find_point_within(min_size + 1, rng);
+        while scanning {
             //println!("rect {} {} {} {} point {} {}", rectangle.x1, rectangle.y1, rectangle.x2, rectangle.y2, point.0, point.1);
             if !self.obstructed_rectangle(&Rectangle {x1: point.x - size_x - 1, y1: point.y - size_y - 1, x2: point.x + size_x + 1, y2: point.y + size_y + 1 }) {
                 let mut growing_x = true;
@@ -476,7 +485,19 @@ impl Obstructions {
                         }
                     }
                 }
-                retries = DONE_RETRYING;
+                scanning = false;
+            } else {
+                point.x += 1;
+                if point.x >= self.w - min_size - 1 {
+                    point.x = min_size + 1;
+                    point.y += 1;
+                    if point.y >= self.h - min_size - 1 {
+                        point.y = min_size + 1;
+                    }
+                }
+                if point == start_point {
+                    scanning = false;
+                }
             }
         }
         //println!("clear rectangle point {} {} size {} {}", point.x, point.y, size_x, size_y);
@@ -498,11 +519,12 @@ struct BattleMap {
     road_width: u32,
     building_count: u32,
     building_size: u32,
-    img: RgbaImage
+    img: RgbaImage,
+    tiles: DynamicImage
 }
 
 impl BattleMap {
-    fn new(w: u32, h: u32, road_count: u32, road_width: u32, building_count: u32, building_size: u32 ) -> BattleMap {        
+    fn new(w: u32, h: u32, road_count: u32, road_width: u32, building_count: u32, building_size: u32, tiles: DynamicImage ) -> BattleMap {
         BattleMap {
             w, 
             h, 
@@ -510,7 +532,8 @@ impl BattleMap {
             road_width, 
             building_count, 
             building_size,
-            img: RgbaImage::new(w * TILE_SIZE, h * TILE_SIZE)
+            img: RgbaImage::new(w * TILE_SIZE, h * TILE_SIZE),
+            tiles
         }
     }
 
@@ -525,23 +548,14 @@ impl BattleMap {
     fn generate(&mut self) {
         let mut bytes: Vec<u8> = Vec::new();
         let mut rng = thread_rng();
-        let dim = self.pixel_dimensions();
-        self.img = RgbaImage::new(dim.0, dim.1);
+        //let dim = self.pixel_dimensions();
+        //self.img = RgbaImage::new(dim.0, dim.1);
 
-        let raw_tiles = match Reader::open("gfx/tiles.png") {
-            Ok(raw_tiles) => raw_tiles,
-            Err(_e) => return
-        };
-        let mut tiles = match raw_tiles.decode() {
-            Ok(tiles) => tiles,
-            Err(_e) => return
-        };
-    
         let mut obstructions = Obstructions::new(self.w, self.h);
     
         // dirt
     
-        let dirt_tile = image::imageops::crop(&mut tiles, 0, 0, TILE_SIZE, TILE_SIZE);
+        let dirt_tile = image::imageops::crop(&mut self.tiles, 0, 0, TILE_SIZE, TILE_SIZE);
     
         for x in 0..self.w {
             for y in 0..self.h {
@@ -552,11 +566,8 @@ impl BattleMap {
         // roads
     
         let full_rect = Rectangle{ x1: 0, y1: 0, x2: self.w - 1, y2: self.h - 1 };
-        let roads = full_rect.divide_with_lines(self.road_count, self.road_margin(), &mut rng);
-    
-        let dirt_tile = tiles.crop_imm(32, 0, TILE_SIZE, TILE_SIZE);
-        let car_h_tile = tiles.crop_imm(64, 32, 64, 32);
-        let car_v_tile = tiles.crop_imm(128, 0, 32, 64);
+        let roads = full_rect.divide_with_lines(self.road_count, self.road_margin(), &mut rng);    
+        let dirt_tile = self.tiles.crop_imm(32, 0, TILE_SIZE, TILE_SIZE);
     
         for road in &roads {
             let mut x = road.x;
@@ -590,6 +601,7 @@ impl BattleMap {
             }
         }
     
+        /*
         for road in &roads {
             if road.length > 4 {
                 let car = road.find_point_within(2, &mut rng);
@@ -601,25 +613,26 @@ impl BattleMap {
                 
             }
         }
+        */
     
         // buildings
     
         //println!("start buildings");
     
-        let floor_tile = tiles.crop_imm(96, 0, TILE_SIZE, TILE_SIZE);
-        let wall_nw_tile = tiles.crop_imm(0, 96, TILE_SIZE, TILE_SIZE);
-        let wall_ne_tile = tiles.crop_imm(32, 96, TILE_SIZE, TILE_SIZE);
-        let wall_sw_tile = tiles.crop_imm(64, 96, TILE_SIZE, TILE_SIZE);
-        let wall_se_tile = tiles.crop_imm(96, 96, TILE_SIZE, TILE_SIZE);
-        let wall_n_tile = tiles.crop_imm(128, 96, TILE_SIZE, TILE_SIZE);
-        let wall_s_tile = tiles.crop_imm(160, 96, TILE_SIZE, TILE_SIZE);
-        let wall_w_tile = tiles.crop_imm(192, 96, TILE_SIZE, TILE_SIZE);
-        let wall_e_tile = tiles.crop_imm(224, 96, TILE_SIZE, TILE_SIZE);
-        let door_w_tile = tiles.crop_imm(0, 64, TILE_SIZE, TILE_SIZE);
-        let door_n_tile = tiles.crop_imm(32, 64, TILE_SIZE, TILE_SIZE);
-        let door_e_tile = tiles.crop_imm(64, 64, TILE_SIZE, TILE_SIZE);
-        let door_s_tile = tiles.crop_imm(96, 64, TILE_SIZE, TILE_SIZE);
-        let crate_tile = tiles.crop_imm(0, 32, TILE_SIZE, TILE_SIZE);
+        let floor_tile = self.tiles.crop_imm(96, 0, TILE_SIZE, TILE_SIZE);
+        let wall_nw_tile = self.tiles.crop_imm(0, 96, TILE_SIZE, TILE_SIZE);
+        let wall_ne_tile = self.tiles.crop_imm(32, 96, TILE_SIZE, TILE_SIZE);
+        let wall_sw_tile = self.tiles.crop_imm(64, 96, TILE_SIZE, TILE_SIZE);
+        let wall_se_tile = self.tiles.crop_imm(96, 96, TILE_SIZE, TILE_SIZE);
+        let wall_n_tile = self.tiles.crop_imm(128, 96, TILE_SIZE, TILE_SIZE);
+        let wall_s_tile = self.tiles.crop_imm(160, 96, TILE_SIZE, TILE_SIZE);
+        let wall_w_tile = self.tiles.crop_imm(192, 96, TILE_SIZE, TILE_SIZE);
+        let wall_e_tile = self.tiles.crop_imm(224, 96, TILE_SIZE, TILE_SIZE);
+        let door_w_tile = self.tiles.crop_imm(0, 64, TILE_SIZE, TILE_SIZE);
+        let door_n_tile = self.tiles.crop_imm(32, 64, TILE_SIZE, TILE_SIZE);
+        let door_e_tile = self.tiles.crop_imm(64, 64, TILE_SIZE, TILE_SIZE);
+        let door_s_tile = self.tiles.crop_imm(96, 64, TILE_SIZE, TILE_SIZE);
+        let crate_tile = self.tiles.crop_imm(0, 32, TILE_SIZE, TILE_SIZE);
     
         for b in 0..self.building_count {
             //println!("building {}", b);
@@ -737,15 +750,36 @@ impl BattleMap {
         // outdoor obstacles
     
         //println!("start obstacles");
+
+        let tree_tile = self.tiles.crop_imm(160, 0, TILE_SIZE * 3, TILE_SIZE * 3);
+        let trees = obstructions.get_unobstructed_count() / 100;
+        for _t in 0..trees {
+            let tree = obstructions.find_clear_rectangle(1, 1, &mut rng);
+            obstructions.obstruct_rectangle(&tree, true);
+            image::imageops::overlay(&mut self.img, &tree_tile, tree.x1 * TILE_SIZE, tree.y1 * TILE_SIZE);
+        }
     
-        let bush_tile = tiles.crop_imm(32, 32, TILE_SIZE, TILE_SIZE);
-        let obstacles = obstructions.get_unobstructed_count() / 30;
-        for _o in 0..obstacles {
+        let bush_tile = self.tiles.crop_imm(32, 32, TILE_SIZE, TILE_SIZE);
+        let bushes = obstructions.get_unobstructed_count() / 30;
+        for _b in 0..bushes {
             let coords = obstructions.find_clear_tile(&mut rng);
             obstructions.obstruct(coords.0, coords.1, true);
             image::imageops::overlay(&mut self.img, &bush_tile, coords.0 * TILE_SIZE, coords.1 * TILE_SIZE);
         }
-    
+
+        let car_h_tile = self.tiles.crop_imm(64, 32, 64, 32);
+        let car_v_tile = self.tiles.crop_imm(128, 0, 32, 64);
+        let cars = obstructions.get_unobstructed_count() / 150;
+        for _c in 0..cars {
+            let car = obstructions.find_clear_rectangle(1, 1, &mut rng);
+            obstructions.obstruct_rectangle(&car, true);
+            if rng.gen::<bool>() {
+                image::imageops::overlay(&mut self.img, &car_h_tile, car.x1 * TILE_SIZE, car.y1 * TILE_SIZE);
+            } else {
+                image::imageops::overlay(&mut self.img, &car_v_tile, car.x1 * TILE_SIZE, car.y1 * TILE_SIZE);
+            }
+        }        
+
         // grid
     
         for x in 0..self.img.width() {
@@ -757,15 +791,6 @@ impl BattleMap {
                 }
             }
         }
-    
-        // done, save
-    
-        /*
-        match self.img.save("map.png") {
-            Ok(_ok) => (),
-            Err(_err) => ()
-        } 
-        */
     }
 
     fn base64(&self)-> String {
@@ -788,7 +813,7 @@ impl BattleMap {
 
 // main program function
 
-fn main() {
+fn main() -> Result<(), image::error::ImageError> {
     //println!("Apocalypsing...");
 
     let mut args = Args::parse();
@@ -813,13 +838,16 @@ fn main() {
 
     //eprintln!("args {:?}", args);
 
+    let tiles = Reader::open(args.tile_file)?.decode()?;
+
     let mut map = BattleMap::new(
         args.width as u32,
         args.height as u32,
         args.road_count as u32,
         args.road_width as u32,
         args.building_count as u32,
-        args.building_size as u32
+        args.building_size as u32,
+        tiles
     );
 
     //eprintln!("{} {}", map.w, map.h);
@@ -835,5 +863,7 @@ fn main() {
     }
 
     //println!("<html><body><p>Hello world</p><img src=\"data:image/png;base64,{}\"></body></html>", img_b64);
+
+    Ok(())
 }
 
