@@ -1,4 +1,4 @@
-function get_image(width, height, road_count, building_count) {
+function get_image(preset) {
 	document.getElementById('map').src = '';
 	document.getElementById("status").textContent="Please wait..."
 	var xhr = new XMLHttpRequest();
@@ -9,7 +9,7 @@ function get_image(width, height, road_count, building_count) {
 			document.getElementById("status").textContent="Done!"
 		}
 	}
-	xhr.open('GET', 'cgi-bin/mapgen?-w=' + width + '&-h=' + height + '&-r=' + road_count + '&-b=' + building_count);
+	xhr.open('GET', 'cgi-bin/mapgen?-p=' + preset);
 	xhr.setRequestHeader('Accept', 'text/plain');
 	xhr.responseType = 'text';
 	xhr.send();  

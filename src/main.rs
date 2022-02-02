@@ -5,13 +5,20 @@ use rand::rngs::ThreadRng;
 use clap::Parser;
 use std::cmp::{min, max};
 use std::env;
+use std::error::Error;
+use std::fs::File;
+use std::io::prelude::*;
+use std::path::Path;
+use serde::Deserialize;
+use serde_json::{Result};
 
 const WEB_MODE_VAR: &str = "BATTLEMAPPER_WEB";
 const WEB_QUERY_VAR: &str = "QUERY_STRING";
 const TILE_SIZE: u32 = 32;
 const DONE_RETRYING: u8 = 100;
+const PRESETS_FILE: &str = "presets.json";
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Deserialize, Clone)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
     #[clap(short, long, default_value_t = 48)]
@@ -33,7 +40,10 @@ struct Args {
     building_size: u8,
 
     #[clap(short, long, default_value = "tiles.png")]
-    tile_file: String
+    tile_file: String,
+
+    #[clap(short, long)]
+    preset: Option<usize>
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -813,7 +823,7 @@ impl BattleMap {
 
 // main program function
 
-fn main() -> Result<(), image::error::ImageError> {
+fn main() {
     //println!("Apocalypsing...");
 
     let mut args = Args::parse();
@@ -821,24 +831,70 @@ fn main() -> Result<(), image::error::ImageError> {
     let mut web_mode = false;
     match env::var(WEB_MODE_VAR) {
         Ok(val) => { web_mode = val.eq("1") },
-        Err(_err) => {}
+        Err(_) => {}
     }
 
     if web_mode {
         match env::var(WEB_QUERY_VAR) {
+            Err(_) => {},
             Ok(val) => { 
                 let mut env_args: Vec<&str> = val.split('&').collect();
                 env_args.insert(0, "");
-                //eprintln!("{:?}", env_args);
                 args = Args::parse_from(env_args);
-            },
-            Err(_err) => {}
+            }
         }
+        let path = Path::new(PRESETS_FILE);
+        let mut presets_file = match File::open(&path) {
+            Err(e) => {
+                eprintln!("Couldn't open preset file: {}", e);
+                return;
+            },
+            Ok(file) => file
+        };
+        let mut preset_string = String::new();
+        match presets_file.read_to_string(&mut preset_string) {
+            Err(e) => {
+                eprintln!("Couldn't read preset file: {}", e);
+                return;
+            },
+            Ok(_) => {}
+        };
+        let presets: Vec<Args> = match serde_json::from_str(&preset_string) {
+            Err(e) => {
+                eprintln!("Couldn't parse preset file: {}", e);
+                return;
+            },
+            Ok(json) => json
+        };
+        let preset_index = match args.preset {
+            None => {
+                eprintln!("Web mode requires preset switch");
+                return;
+            },
+            Some(index) => index
+        };
+        println!("preset index {}", preset_index);
+        args = presets[preset_index].clone();
+    } else {
+        println!("not in web mode");
     }
 
     //eprintln!("args {:?}", args);
 
-    let tiles = Reader::open(args.tile_file)?.decode()?;
+    let tile_file = match Reader::open(&args.tile_file) {
+        Err(e) => {
+            eprintln!("Couldn't open tile file {}: {}", args.tile_file, e);
+            return;
+        },
+        Ok(file) => file
+    };
+    let tiles = match tile_file.decode() {
+        Err(e) => {
+            eprintln!("Couldn't decode tile file: {}", e);
+            return;
+        },
+        Ok(tiles) => tiles
+    };
 
     let mut map = BattleMap::new(
         args.width as u32,
@@ -863,7 +919,5 @@ fn main() -> Result<(), image::error::ImageError> {
     }
 
     //println!("<html><body><p>Hello world</p><img src=\"data:image/png;base64,{}\"></body></html>", img_b64);
-
-    Ok(())
 }
 
