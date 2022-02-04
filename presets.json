@@ -6,7 +6,7 @@
         "road_width": 0,
         "building_count": 1,
         "building_size": 16,
-        "tile_file": "gfx/postapoc-tiles.png"
+        "tile_file": "gfx/fantasy-tiles.png"
     },
     {
         "width": 24,
@@ -16,5 +16,41 @@
         "building_count": 2,
         "building_size": 16,
         "tile_file": "gfx/fantasy-tiles.png"
-    }
+    },
+    {
+        "width": 48,
+        "height": 48,
+        "road_count": 4,
+        "road_width": 2,
+        "building_count": 6,
+        "building_size": 16,
+        "tile_file": "gfx/fantasy-tiles.png"
+    },
+    {
+        "width": 16,
+        "height": 16,
+        "road_count": 0,
+        "road_width": 0,
+        "building_count": 1,
+        "building_size": 16,
+        "tile_file": "gfx/postapoc-tiles.png"
+    },
+    {
+        "width": 24,
+        "height": 24,
+        "road_count": 1,
+        "road_width": 2,
+        "building_count": 2,
+        "building_size": 16,
+        "tile_file": "gfx/postapoc-tiles.png"
+    },
+    {
+        "width": 48,
+        "height": 48,
+        "road_count": 4,
+        "road_width": 2,
+        "building_count": 6,
+        "building_size": 16,
+        "tile_file": "gfx/postapoc-tiles.png"
+    }    
 ]

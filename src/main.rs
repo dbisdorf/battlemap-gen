@@ -829,54 +829,45 @@ fn main() {
     let mut args = Args::parse();
 
     let mut web_mode = false;
-    match env::var(WEB_MODE_VAR) {
-        Ok(val) => { web_mode = val.eq("1") },
-        Err(_) => {}
-    }
-
-    if web_mode {
-        match env::var(WEB_QUERY_VAR) {
-            Err(_) => {},
-            Ok(val) => { 
-                let mut env_args: Vec<&str> = val.split('&').collect();
-                env_args.insert(0, "");
-                args = Args::parse_from(env_args);
-            }
+    match env::var(WEB_QUERY_VAR) {
+        Err(_) => {},
+        Ok(val) => { 
+            web_mode = true;
+            let mut env_args: Vec<&str> = val.split('&').collect();
+            env_args.insert(0, "");
+            args = Args::parse_from(env_args);
+            let path = Path::new(PRESETS_FILE);
+            let mut presets_file = match File::open(&path) {
+                Err(e) => {
+                    eprintln!("Couldn't open preset file: {}", e);
+                    return;
+                },
+                Ok(file) => file
+            };
+            let mut preset_string = String::new();
+            match presets_file.read_to_string(&mut preset_string) {
+                Err(e) => {
+                    eprintln!("Couldn't read preset file: {}", e);
+                    return;
+                },
+                Ok(_) => {}
+            };
+            let presets: Vec<Args> = match serde_json::from_str(&preset_string) {
+                Err(e) => {
+                    eprintln!("Couldn't parse preset file: {}", e);
+                    return;
+                },
+                Ok(json) => json
+            };
+            let preset_index = match args.preset {
+                None => {
+                    eprintln!("Web mode requires preset switch");
+                    return;
+                },
+                Some(index) => index
+            };
+            args = presets[preset_index].clone();    
         }
-        let path = Path::new(PRESETS_FILE);
-        let mut presets_file = match File::open(&path) {
-            Err(e) => {
-                eprintln!("Couldn't open preset file: {}", e);
-                return;
-            },
-            Ok(file) => file
-        };
-        let mut preset_string = String::new();
-        match presets_file.read_to_string(&mut preset_string) {
-            Err(e) => {
-                eprintln!("Couldn't read preset file: {}", e);
-                return;
-            },
-            Ok(_) => {}
-        };
-        let presets: Vec<Args> = match serde_json::from_str(&preset_string) {
-            Err(e) => {
-                eprintln!("Couldn't parse preset file: {}", e);
-                return;
-            },
-            Ok(json) => json
-        };
-        let preset_index = match args.preset {
-            None => {
-                eprintln!("Web mode requires preset switch");
-                return;
-            },
-            Some(index) => index
-        };
-        println!("preset index {}", preset_index);
-        args = presets[preset_index].clone();
-    } else {
-        println!("not in web mode");
     }
 
     //eprintln!("args {:?}", args);

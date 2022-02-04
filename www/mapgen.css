@@ -1,0 +1,18 @@
+.page-title {
+    font-weight: bold;
+    font-size: x-large;
+}
+.all-themes {
+    display: grid;
+    grid-template-columns: 10em 10em;
+}
+.one-theme {
+    padding: 1em;
+}
+.theme-header {
+    font-weight: bold;
+}
+.map-button {
+    width: 100%;
+}
+

@@ -1,14 +1,35 @@
 <html>
+    <head>
+        <title>Battlemapper</title>
+        <link rel="stylesheet" href="mapgen.css">
+    </head>
     <body>
         <script src="mapgen.js"></script>
-        <h1>Battlemapper</h1>
-        <p>
-            <input type="button" id="makemap" value="Lone Building" onclick="get_image(0)">
-            <input type="button" id="makemap" value="Roadside Shacks" onclick="get_image(1)">
-        </p>
-        <p id="status">
-            Greetings!
-        </p>
-        <img id="map">
+        <div class="page-title">
+            Battlemapper
+        </div>
+        <div class="intro">
+            Because you, the GM, weren't prepared for your players to ambush the evil doppleganger and his guards in broad daylight, and now you need a gridded map so you can play out the mayhem.
+        </div>
+        <div class="all-themes">
+            <div class="one-theme">
+                <div class="theme-header">Fantasy Village</div>
+                <input class="map-button" type="button" id="makemap" value="Lone Building" onclick="get_image(0)">
+                <input class="map-button" type="button" id="makemap" value="Roadside Shacks" onclick="get_image(1)">
+                <input class="map-button" type="button" id="makemap" value="Crossroads" onclick="get_image(2)">
+            </div>
+            <div class="one-theme">
+                <div class="theme-header">Post-Apocalypse</div>
+                <input class="map-button" type="button" id="makemap" value="Lone Building" onclick="get_image(3)">
+                <input class="map-button" type="button" id="makemap" value="Roadside Shacks" onclick="get_image(4)">
+                <input class="map-button" type="button" id="makemap" value="Crossroads" onclick="get_image(5)">
+            </div>
+        </div>
+        <div id="status" class="status">
+            Click a button to start!
+        </div>
+        <div>
+            <img id="map">
+        </div>
     </body>
 </html>

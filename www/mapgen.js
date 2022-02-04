@@ -9,7 +9,7 @@ function get_image(preset) {
 			document.getElementById("status").textContent="Done!"
 		}
 	}
-	xhr.open('GET', 'cgi-bin/mapgen?-p=' + preset);
+	xhr.open('GET', '/mapgen-cgi/mapgen?-p=' + preset);
 	xhr.setRequestHeader('Accept', 'text/plain');
 	xhr.responseType = 'text';
 	xhr.send();  
